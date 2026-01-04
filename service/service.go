@@ -28,6 +28,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"time"
 
 	"connectrpc.com/connect"
@@ -336,6 +337,64 @@ func (s *AccountService) GetClusterStats(ctx context.Context, req *connect.Reque
 	}
 
 	return connect.NewResponse(clusterStatsResponse), nil
+}
+
+// GetActorDetails returns detailed information about actors in the cluster
+func (s *AccountService) GetActorDetails(ctx context.Context, req *connect.Request[opspb.GetActorDetailsRequest]) (*connect.Response[opspb.GetActorDetailsResponse], error) {
+	//通过s.actorSystem查询集群内所有actor
+	actors := s.actorSystem.Actors()
+
+	// 获取请求参数
+	requestedActorID := req.Msg.GetActorId()
+	requestedNodeID := req.Msg.GetNodeId()
+
+	var actorDetails []*opspb.ActorDetails
+
+	// 遍历所有actor并构建详细信息
+	for _, actor := range actors {
+		actorID := actor.Name()
+
+		// 根据请求参数过滤actor
+		if requestedActorID != "" && actorID != requestedActorID {
+			//continue
+		}
+
+		// 获取节点信息
+		hostname, _ := os.Hostname()
+		nodeID := fmt.Sprintf("%s:%d", hostname, s.config.GossipPort)
+
+		if requestedNodeID != "" && nodeID != requestedNodeID {
+			//continue
+		}
+
+		// 构建actor详细信息
+		actorDetail := &opspb.ActorDetails{
+			ActorId:       actorID,
+			ActorType:     actor.Name(), // 根据实际actor类型设置
+			NodeId:        nodeID,
+			Status:        opspb.ActorStatus_ACTOR_STATUS_RUNNING,
+			CreatedAt:     time.Now().Unix(), // 需要从actor获取实际创建时间
+			LastActivity:  time.Now().Unix(), // 需要从actor获取最后活动时间
+			MessageCount:  0,                 // 需要从actor获取消息计数
+			ErrorCount:    0,                 // 需要从actor获取错误计数
+			ParentActorId: "",                // 需要从actor获取父actor ID
+			ChildActorIds: []string{},        // 需要从actor获取子actor IDs
+			Metadata: map[string]string{
+				"actor_role":  *actor.Role(),
+				"actor_state": fmt.Sprintf("%v", actor.IsRunning()),
+			},
+		}
+
+		actorDetails = append(actorDetails, actorDetail)
+	}
+
+	// 构建响应
+	response := &opspb.GetActorDetailsResponse{
+		Actors:     actorDetails,
+		TotalCount: int32(len(actorDetails)),
+	}
+
+	return connect.NewResponse(response), nil
 }
 
 // Start starts the service

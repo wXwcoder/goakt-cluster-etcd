@@ -44,6 +44,9 @@ const (
 	// OpsServiceGetClusterStatsProcedure is the fully-qualified name of the OpsService's
 	// GetClusterStats RPC.
 	OpsServiceGetClusterStatsProcedure = "/opspb.OpsService/GetClusterStats"
+	// OpsServiceGetActorDetailsProcedure is the fully-qualified name of the OpsService's
+	// GetActorDetails RPC.
+	OpsServiceGetActorDetailsProcedure = "/opspb.OpsService/GetActorDetails"
 )
 
 // OpsServiceClient is a client for the opspb.OpsService service.
@@ -56,6 +59,8 @@ type OpsServiceClient interface {
 	HealthCheck(context.Context, *connect.Request[opspb.HealthCheckRequest]) (*connect.Response[opspb.HealthCheckResponse], error)
 	// GetClusterStats returns cluster-wide statistics
 	GetClusterStats(context.Context, *connect.Request[opspb.ClusterStatsRequest]) (*connect.Response[opspb.ClusterStatsResponse], error)
+	// GetActorDetails returns detailed information about actors in the cluster
+	GetActorDetails(context.Context, *connect.Request[opspb.GetActorDetailsRequest]) (*connect.Response[opspb.GetActorDetailsResponse], error)
 }
 
 // NewOpsServiceClient constructs a client for the opspb.OpsService service. By default, it uses the
@@ -93,6 +98,12 @@ func NewOpsServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...
 			connect.WithSchema(opsServiceMethods.ByName("GetClusterStats")),
 			connect.WithClientOptions(opts...),
 		),
+		getActorDetails: connect.NewClient[opspb.GetActorDetailsRequest, opspb.GetActorDetailsResponse](
+			httpClient,
+			baseURL+OpsServiceGetActorDetailsProcedure,
+			connect.WithSchema(opsServiceMethods.ByName("GetActorDetails")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -102,6 +113,7 @@ type opsServiceClient struct {
 	getNodeDetails  *connect.Client[opspb.GetNodeDetailsRequest, opspb.GetNodeDetailsResponse]
 	healthCheck     *connect.Client[opspb.HealthCheckRequest, opspb.HealthCheckResponse]
 	getClusterStats *connect.Client[opspb.ClusterStatsRequest, opspb.ClusterStatsResponse]
+	getActorDetails *connect.Client[opspb.GetActorDetailsRequest, opspb.GetActorDetailsResponse]
 }
 
 // GetClusterNodes calls opspb.OpsService.GetClusterNodes.
@@ -124,6 +136,11 @@ func (c *opsServiceClient) GetClusterStats(ctx context.Context, req *connect.Req
 	return c.getClusterStats.CallUnary(ctx, req)
 }
 
+// GetActorDetails calls opspb.OpsService.GetActorDetails.
+func (c *opsServiceClient) GetActorDetails(ctx context.Context, req *connect.Request[opspb.GetActorDetailsRequest]) (*connect.Response[opspb.GetActorDetailsResponse], error) {
+	return c.getActorDetails.CallUnary(ctx, req)
+}
+
 // OpsServiceHandler is an implementation of the opspb.OpsService service.
 type OpsServiceHandler interface {
 	// GetClusterNodes returns the list of all nodes in the cluster
@@ -134,6 +151,8 @@ type OpsServiceHandler interface {
 	HealthCheck(context.Context, *connect.Request[opspb.HealthCheckRequest]) (*connect.Response[opspb.HealthCheckResponse], error)
 	// GetClusterStats returns cluster-wide statistics
 	GetClusterStats(context.Context, *connect.Request[opspb.ClusterStatsRequest]) (*connect.Response[opspb.ClusterStatsResponse], error)
+	// GetActorDetails returns detailed information about actors in the cluster
+	GetActorDetails(context.Context, *connect.Request[opspb.GetActorDetailsRequest]) (*connect.Response[opspb.GetActorDetailsResponse], error)
 }
 
 // NewOpsServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -167,6 +186,12 @@ func NewOpsServiceHandler(svc OpsServiceHandler, opts ...connect.HandlerOption) 
 		connect.WithSchema(opsServiceMethods.ByName("GetClusterStats")),
 		connect.WithHandlerOptions(opts...),
 	)
+	opsServiceGetActorDetailsHandler := connect.NewUnaryHandler(
+		OpsServiceGetActorDetailsProcedure,
+		svc.GetActorDetails,
+		connect.WithSchema(opsServiceMethods.ByName("GetActorDetails")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/opspb.OpsService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case OpsServiceGetClusterNodesProcedure:
@@ -177,6 +202,8 @@ func NewOpsServiceHandler(svc OpsServiceHandler, opts ...connect.HandlerOption) 
 			opsServiceHealthCheckHandler.ServeHTTP(w, r)
 		case OpsServiceGetClusterStatsProcedure:
 			opsServiceGetClusterStatsHandler.ServeHTTP(w, r)
+		case OpsServiceGetActorDetailsProcedure:
+			opsServiceGetActorDetailsHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -200,4 +227,8 @@ func (UnimplementedOpsServiceHandler) HealthCheck(context.Context, *connect.Requ
 
 func (UnimplementedOpsServiceHandler) GetClusterStats(context.Context, *connect.Request[opspb.ClusterStatsRequest]) (*connect.Response[opspb.ClusterStatsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("opspb.OpsService.GetClusterStats is not implemented"))
+}
+
+func (UnimplementedOpsServiceHandler) GetActorDetails(context.Context, *connect.Request[opspb.GetActorDetailsRequest]) (*connect.Response[opspb.GetActorDetailsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("opspb.OpsService.GetActorDetails is not implemented"))
 }

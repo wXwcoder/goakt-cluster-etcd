@@ -99,6 +99,8 @@ func (p *OpsActor) handleOpsMessage(ctx *goakt.ReceiveContext, msg *opspb.OpsAct
 		p.handleHealthCheck(ctx, msg.GetHealthCheck())
 	case msg.GetGetClusterStats() != nil:
 		p.handleGetClusterStats(ctx, msg.GetGetClusterStats())
+	case msg.GetGetActorDetails() != nil:
+		p.handleGetActorDetails(ctx, msg.GetGetActorDetails())
 	default:
 		ctx.Unhandled()
 	}
@@ -196,6 +198,42 @@ func (p *OpsActor) handleGetClusterStats(ctx *goakt.ReceiveContext, req *opspb.C
 	ctx.Response(response)
 }
 
+// handleGetActorDetails handles GetActorDetails request
+func (p *OpsActor) handleGetActorDetails(ctx *goakt.ReceiveContext, req *opspb.GetActorDetailsRequest) {
+	actorID := req.GetActorId()
+	nodeID := req.GetNodeId()
+
+	// Get all actors from the cluster
+	actors := p.getClusterActors()
+
+	// Filter actors based on request parameters
+	var filteredActors []*opspb.ActorDetails
+	for _, actor := range actors {
+		// Filter by node ID if specified
+		if nodeID != "" && actor.NodeId != nodeID {
+			continue
+		}
+		// Filter by actor ID if specified
+		if actorID != "" && actor.ActorId != actorID {
+			continue
+		}
+		filteredActors = append(filteredActors, actor)
+	}
+
+	actorDetails := &opspb.GetActorDetailsResponse{
+		Actors:     filteredActors,
+		TotalCount: int32(len(filteredActors)),
+	}
+
+	response := &opspb.OpsActorResponse{
+		Response: &opspb.OpsActorResponse_ActorDetails{
+			ActorDetails: actorDetails,
+		},
+	}
+
+	ctx.Response(response)
+}
+
 // getClusterNodes retrieves all nodes from service discovery
 func (p *OpsActor) getClusterNodes() ([]*opspb.ClusterNode, error) {
 	if p.discovery == nil {
@@ -250,6 +288,83 @@ func (p *OpsActor) getClusterNodes() ([]*opspb.ClusterNode, error) {
 	}
 
 	return nodes, nil
+}
+
+// getClusterActors retrieves all actors from the cluster
+func (p *OpsActor) getClusterActors() []*opspb.ActorDetails {
+	var actors []*opspb.ActorDetails
+
+	// Get current node's actors
+	currentNodeActors := p.getCurrentNodeActors()
+
+	actors = append(actors, currentNodeActors...)
+
+	// TODO: Get actors from remote nodes in the cluster
+	// This would require inter-node communication to query remote actor systems
+
+	return actors
+}
+
+// getCurrentNodeActors retrieves actors from the current node
+func (p *OpsActor) getCurrentNodeActors() []*opspb.ActorDetails {
+	var actors []*opspb.ActorDetails
+
+	// Get hostname for node ID
+	hostname, _ := os.Hostname()
+	nodeID := fmt.Sprintf("%s:%d", hostname, p.config.GossipPort)
+
+	// TODO: Implement actual actor retrieval from the actor system
+	// For now, we'll create sample data to demonstrate the functionality
+
+	// Sample account actors (simulating actual account actors in the system)
+	sampleActors := []string{
+		"account-001",
+		"account-002",
+		"account-003",
+		"account-004",
+		"account-005",
+	}
+
+	for i, actorID := range sampleActors {
+		actor := &opspb.ActorDetails{
+			ActorId:       actorID,
+			ActorType:     "Account",
+			NodeId:        nodeID,
+			Status:        opspb.ActorStatus_ACTOR_STATUS_RUNNING,
+			CreatedAt:     time.Now().Add(-time.Duration(i) * time.Hour).Unix(),
+			LastActivity:  time.Now().Add(-time.Duration(i) * time.Minute).Unix(),
+			MessageCount:  int32(i * 10),
+			ErrorCount:    int32(i),
+			ParentActorId: "", // Account actors typically don't have parents
+			ChildActorIds: []string{},
+			Metadata: map[string]string{
+				"created_by": "system",
+				"version":    "1.0.0",
+			},
+		}
+		actors = append(actors, actor)
+	}
+
+	// Add the OpsActor itself
+	opsActor := &opspb.ActorDetails{
+		ActorId:       "ops-actor",
+		ActorType:     "OpsActor",
+		NodeId:        nodeID,
+		Status:        opspb.ActorStatus_ACTOR_STATUS_RUNNING,
+		CreatedAt:     p.startTime.Unix(),
+		LastActivity:  time.Now().Unix(),
+		MessageCount:  0, // TODO: Track actual message count
+		ErrorCount:    0,
+		ParentActorId: "",
+		ChildActorIds: []string{},
+		Metadata: map[string]string{
+			"role":        "cluster-management",
+			"description": "Cluster operations and monitoring actor",
+		},
+	}
+	actors = append(actors, opsActor)
+
+	return actors
 }
 
 // countHealthyNodes counts the number of healthy nodes

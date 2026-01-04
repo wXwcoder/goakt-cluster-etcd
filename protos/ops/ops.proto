@@ -83,6 +83,43 @@ message ClusterStatsResponse {
   map<string, int32> actor_type_counts = 5;
 }
 
+// ActorStatus represents the status of an actor
+enum ActorStatus {
+  ACTOR_STATUS_UNKNOWN = 0;
+  ACTOR_STATUS_RUNNING = 1;
+  ACTOR_STATUS_STOPPED = 2;
+  ACTOR_STATUS_PAUSED = 3;
+  ACTOR_STATUS_RESTARTING = 4;
+}
+
+// ActorDetails represents detailed information about an actor
+message ActorDetails {
+  string actor_id = 1;
+  string actor_type = 2;
+  string node_id = 3;
+  ActorStatus status = 4;
+  int64 created_at = 5;
+  int64 last_activity = 6;
+  int32 message_count = 7;
+  int32 error_count = 8;
+  string parent_actor_id = 9;
+  repeated string child_actor_ids = 10;
+  map<string, string> metadata = 11;
+}
+
+// GetActorDetailsRequest is the request to get actor details
+message GetActorDetailsRequest {
+  string node_id = 1;
+  string actor_id = 2;
+  bool include_children = 3;
+}
+
+// GetActorDetailsResponse is the response containing actor details
+message GetActorDetailsResponse {
+  repeated ActorDetails actors = 1;
+  int32 total_count = 2;
+}
+
 // OpsService provides operational APIs for cluster management
 service OpsService {
   // GetClusterNodes returns the list of all nodes in the cluster
@@ -96,6 +133,9 @@ service OpsService {
   
   // GetClusterStats returns cluster-wide statistics
   rpc GetClusterStats(ClusterStatsRequest) returns (ClusterStatsResponse);
+  
+  // GetActorDetails returns detailed information about actors in the cluster
+  rpc GetActorDetails(GetActorDetailsRequest) returns (GetActorDetailsResponse);
 }
 
 // OpsActor messages for actor-based cluster operations
@@ -105,6 +145,7 @@ message OpsActorMessage {
     GetNodeDetailsRequest get_node_details = 2;
     HealthCheckRequest health_check = 3;
     ClusterStatsRequest get_cluster_stats = 4;
+    GetActorDetailsRequest get_actor_details = 5;
   }
 }
 
@@ -114,5 +155,6 @@ message OpsActorResponse {
     GetNodeDetailsResponse node_details = 2;
     HealthCheckResponse health_check = 3;
     ClusterStatsResponse cluster_stats = 4;
+    GetActorDetailsResponse actor_details = 5;
   }
 }
