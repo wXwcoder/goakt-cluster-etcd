@@ -80,7 +80,7 @@ var runCmd = &cobra.Command{
 			Endpoints:       config.EtcdEndpoints,
 			ActorSystemName: config.ActorSystemName,
 			Host:            host,
-			DiscoveryPort:   config.PeersPort,
+			DiscoveryPort:   config.GossipPort,
 			TTL:             config.EtcdTTL,
 			DialTimeout:     time.Duration(config.EtcdDialTimeout) * time.Second,
 			Timeout:         time.Duration(config.EtcdTimeout) * time.Second,
