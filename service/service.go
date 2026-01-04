@@ -350,10 +350,11 @@ func (s *AccountService) GetActorDetails(ctx context.Context, req *connect.Reque
 
 	var actorDetails []*opspb.ActorDetails
 
+	s.logger.Infof("GetActorDetails request: %+v", len(actors))
 	// 遍历所有actor并构建详细信息
 	for _, actor := range actors {
 		actorID := actor.Name()
-
+		s.logger.Infof("actorID: %s", actorID)
 		// 根据请求参数过滤actor
 		if requestedActorID != "" && actorID != requestedActorID {
 			//continue
@@ -380,7 +381,6 @@ func (s *AccountService) GetActorDetails(ctx context.Context, req *connect.Reque
 			ParentActorId: "",                // 需要从actor获取父actor ID
 			ChildActorIds: []string{},        // 需要从actor获取子actor IDs
 			Metadata: map[string]string{
-				"actor_role":  *actor.Role(),
 				"actor_state": fmt.Sprintf("%v", actor.IsRunning()),
 			},
 		}
