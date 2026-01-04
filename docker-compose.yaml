@@ -1,0 +1,121 @@
+version: "3.9"
+
+services:
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.0
+    command: |
+      etcd 
+        --name etcd-1
+        --data-dir /etcd-data
+        --listen-client-urls http://0.0.0.0:2379 
+        --advertise-client-urls http://etcd:2379 
+        --listen-peer-urls http://0.0.0.0:2380 
+        --initial-advertise-peer-urls http://etcd:2380 
+        --initial-cluster etcd-1=http://etcd:2380
+        --initial-cluster-state new
+        --initial-cluster-token etcd-cluster-1
+    ports:
+      - "2379:2379"
+      - "2380:2380"
+    environment:
+      ETCDCTL_API: "3"
+
+  node0:
+    image: "accounts:dev"
+    hostname: node0
+    ports:
+      - "8000:50051"
+      - "9092"
+      - "3322"
+      - "3320"
+    environment:
+      SERVICE_NAME: node0
+      SYSTEM_NAME: Accounts
+      PORT: 50051
+      GOSSIP_PORT: 3322
+      PEERS_PORT: 3320
+      REMOTING_PORT: 50052
+      ETCD_ENDPOINTS: etcd:2379
+      ETCD_DIAL_TIMEOUT: 5
+      ETCD_TTL: 30
+      ETCD_TIMEOUT: 5
+
+  node1:
+    image: "accounts:dev"
+    hostname: node1
+    ports:
+      - "8001:50051"
+      - "9092"
+      - "3322"
+      - "3320"
+    environment:
+      SERVICE_NAME: node1
+      SYSTEM_NAME: Accounts
+      PORT: 50051
+      GOSSIP_PORT: 3322
+      PEERS_PORT: 3320
+      REMOTING_PORT: 50052
+      ETCD_ENDPOINTS: etcd:2379
+      ETCD_DIAL_TIMEOUT: 5
+      ETCD_TTL: 30
+      ETCD_TIMEOUT: 5
+
+  node2:
+    image: "accounts:dev"
+    hostname: node2
+    ports:
+      - "8002:50051"
+      - "9092"
+      - "3322"
+      - "3320"
+    environment:
+      SERVICE_NAME: node2
+      SYSTEM_NAME: Accounts
+      PORT: 50051
+      GOSSIP_PORT: 3322
+      PEERS_PORT: 3320
+      REMOTING_PORT: 50052
+      ETCD_ENDPOINTS: etcd:2379
+      ETCD_DIAL_TIMEOUT: 5
+      ETCD_TTL: 30
+      ETCD_TIMEOUT: 5
+
+  node3:
+    image: "accounts:dev"
+    hostname: node3
+    ports:
+      - "8003:50051"
+      - "9092"
+      - "3322"
+      - "3320"
+    environment:
+      SERVICE_NAME: node3
+      SYSTEM_NAME: Accounts
+      PORT: 50051
+      GOSSIP_PORT: 3322
+      PEERS_PORT: 3320
+      REMOTING_PORT: 50052
+      ETCD_ENDPOINTS: etcd:2379
+      ETCD_DIAL_TIMEOUT: 5
+      ETCD_TTL: 30
+      ETCD_TIMEOUT: 5
+
+  node4:
+    image: "accounts:dev"
+    hostname: node4
+    ports:
+      - "8004:50051"
+      - "9092"
+      - "3322"
+      - "3320"
+    environment:
+      SERVICE_NAME: node4
+      SYSTEM_NAME: Accounts
+      PORT: 50051
+      GOSSIP_PORT: 3322
+      PEERS_PORT: 3320
+      REMOTING_PORT: 50052
+      ETCD_ENDPOINTS: etcd:2379
+      ETCD_DIAL_TIMEOUT: 5
+      ETCD_TTL: 30
+      ETCD_TIMEOUT: 5
