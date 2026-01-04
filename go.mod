@@ -5,6 +5,7 @@ go 1.25.3
 require (
 	connectrpc.com/connect v1.19.1
 	connectrpc.com/otelconnect v0.8.0
+	github.com/bufbuild/connect-go v1.10.0
 	github.com/caarlos0/env/v11 v11.3.1
 	github.com/deckarep/golang-set/v2 v2.8.0
 	github.com/joho/godotenv v1.5.1

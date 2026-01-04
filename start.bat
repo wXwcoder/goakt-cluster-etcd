@@ -29,29 +29,29 @@ echo.
 
 REM Start ETCD service
 echo [1/3] Starting ETCD service...
-start "ETCD Server" "%ETCD_EXE%" ^
-    --name etcd-1 ^
-    --data-dir etcd-data ^
-    --listen-client-urls http://0.0.0.0:2379 ^
-    --advertise-client-urls http://localhost:2379 ^
-    --listen-peer-urls http://0.0.0.0:2380 ^
-    --initial-advertise-peer-urls http://localhost:2380 ^
-    --initial-cluster etcd-1=http://localhost:2380 ^
-    --initial-cluster-state new ^
-    --initial-cluster-token etcd-cluster-1
+::start "ETCD Server" "%ETCD_EXE%" ^
+::    --name etcd-1 ^
+::    --data-dir etcd-data ^
+::    --listen-client-urls http://0.0.0.0:2379 ^
+::    --advertise-client-urls http://localhost:2379 ^
+::    --listen-peer-urls http://0.0.0.0:2380 ^
+::    --initial-advertise-peer-urls http://localhost:2380 ^
+::    --initial-cluster etcd-1=http://localhost:2380 ^
+::    --initial-cluster-state new ^
+::    --initial-cluster-token etcd-cluster-1
 
 echo   Waiting for ETCD service to start...
 timeout /t 3 /nobreak >nul
 
 REM Start Accounts node services - simple approach
-echo [2/3] Starting node0 service (Port: 8000)...
-start "node0" "%ACCOUNTS_EXE%" run ^
-    --service-name node0 ^
+echo [2/3] Starting node1 service (Port: 11001)...
+start "node1" "%ACCOUNTS_EXE%" run ^
+    --service-name node1 ^
     --system-name Accounts ^
-    --port 50051 ^
-    --gossip-port 3322 ^
-    --peers-port 3320 ^
-    --remoting-port 50052 ^
+    --port 11001 ^
+    --gossip-port 11002 ^
+    --peers-port 11003 ^
+    --remoting-port 11004 ^
     --etcd-endpoints localhost:2379 ^
     --etcd-dial-timeout 5 ^
     --etcd-ttl 30 ^
@@ -60,14 +60,14 @@ start "node0" "%ACCOUNTS_EXE%" run ^
 echo   Waiting 3 seconds to start next node...
 timeout /t 3 /nobreak >nul
 
-echo [3/3] Starting node1 service (Port: 8001)...
-start "node1" "%ACCOUNTS_EXE%" run ^
-    --service-name node1 ^
+echo [3/3] Starting node2 service (Port: 12001)...
+start "node2" "%ACCOUNTS_EXE%" run ^
+    --service-name node2 ^
     --system-name Accounts ^
-    --port 50052 ^
-    --gossip-port 3323 ^
-    --peers-port 3321 ^
-    --remoting-port 50053 ^
+    --port 12001 ^
+    --gossip-port 12002 ^
+    --peers-port 12003 ^
+    --remoting-port 12004 ^
     --etcd-endpoints localhost:2379 ^
     --etcd-dial-timeout 5 ^
     --etcd-ttl 30 ^

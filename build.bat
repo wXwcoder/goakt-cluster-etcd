@@ -1,1 +1,1 @@
-go build -o bin/accounts.exe .
+go build -o bin/goakt-cluster-etcd.exe .

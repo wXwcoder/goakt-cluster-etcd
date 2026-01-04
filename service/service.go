@@ -43,6 +43,10 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"goakt-actors-cluster/actors"
+	"goakt-actors-cluster/config"
+	clusterdiscovery "goakt-actors-cluster/discovery"
+	"goakt-actors-cluster/internal/opspb"
+	"goakt-actors-cluster/internal/opspb/opspbconnect"
 	"goakt-actors-cluster/internal/samplepb"
 	"goakt-actors-cluster/internal/samplepb/samplepbconnect"
 )
@@ -55,17 +59,30 @@ type AccountService struct {
 	port        int
 	server      *http.Server
 	remoting    remote.Remoting
+	discovery   *clusterdiscovery.Discovery
+	config      *config.Config
+	opsActor    *goakt.PID
 }
 
-var _ samplepbconnect.AccountServiceHandler = &AccountService{}
+// var _ samplepbconnect.AccountServiceHandler = &AccountService{}
+var _ opspbconnect.OpsServiceHandler = &AccountService{}
 
 // NewAccountService creates an instance of AccountService
-func NewAccountService(system goakt.ActorSystem, remoting remote.Remoting, logger log.Logger, port int) *AccountService {
+func NewAccountService(
+	system goakt.ActorSystem,
+	remoting remote.Remoting,
+	logger log.Logger,
+	discovery *clusterdiscovery.Discovery,
+	config *config.Config,
+	port int,
+) *AccountService {
 	return &AccountService{
 		actorSystem: system,
 		logger:      logger,
 		port:        port,
 		remoting:    remoting,
+		discovery:   discovery,
+		config:      config,
 	}
 }
 
@@ -201,8 +218,150 @@ func (s *AccountService) GetAccount(ctx context.Context, c *connect.Request[samp
 	}
 }
 
+// OpsService implementation
+
+// GetNodeDetails returns detailed information about a specific node
+
+// GetClusterNodes returns the list of all nodes in the cluster
+func (s *AccountService) GetClusterNodes(ctx context.Context, req *connect.Request[opspb.GetClusterNodesRequest]) (*connect.Response[opspb.GetClusterNodesResponse], error) {
+	// Forward the request to the OpsActor
+	actorMessage := &opspb.OpsActorMessage{
+		Message: &opspb.OpsActorMessage_GetClusterNodes{
+			GetClusterNodes: req.Msg,
+		},
+	}
+
+	response, err := goakt.Ask(ctx, s.opsActor, actorMessage, time.Second)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+
+	actorResponse, ok := response.(*opspb.OpsActorResponse)
+	if !ok {
+		return nil, connect.NewError(connect.CodeInternal,
+			fmt.Errorf("invalid response type from OpsActor"))
+	}
+
+	clusterNodesResponse := actorResponse.GetClusterNodes()
+	if clusterNodesResponse == nil {
+		return nil, connect.NewError(connect.CodeInternal,
+			fmt.Errorf("OpsActor returned nil response for GetClusterNodes"))
+	}
+
+	return connect.NewResponse(clusterNodesResponse), nil
+}
+
+// GetNodeDetails returns detailed information about a specific node
+func (s *AccountService) GetNodeDetails(ctx context.Context, req *connect.Request[opspb.GetNodeDetailsRequest]) (*connect.Response[opspb.GetNodeDetailsResponse], error) {
+	// Forward the request to the OpsActor
+	actorMessage := &opspb.OpsActorMessage{
+		Message: &opspb.OpsActorMessage_GetNodeDetails{
+			GetNodeDetails: req.Msg,
+		},
+	}
+
+	response, err := goakt.Ask(ctx, s.opsActor, actorMessage, time.Second)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+
+	actorResponse, ok := response.(*opspb.OpsActorResponse)
+	if !ok {
+		return nil, connect.NewError(connect.CodeInternal,
+			fmt.Errorf("invalid response type from OpsActor"))
+	}
+
+	nodeDetailsResponse := actorResponse.GetNodeDetails()
+	if nodeDetailsResponse == nil {
+		return nil, connect.NewError(connect.CodeNotFound,
+			fmt.Errorf("node %s not found", req.Msg.GetNodeId()))
+	}
+
+	return connect.NewResponse(nodeDetailsResponse), nil
+}
+
+// HealthCheck performs a health check on the current node
+func (s *AccountService) HealthCheck(ctx context.Context, req *connect.Request[opspb.HealthCheckRequest]) (*connect.Response[opspb.HealthCheckResponse], error) {
+	// Forward the request to the OpsActor
+	actorMessage := &opspb.OpsActorMessage{
+		Message: &opspb.OpsActorMessage_HealthCheck{
+			HealthCheck: req.Msg,
+		},
+	}
+
+	response, err := goakt.Ask(ctx, s.opsActor, actorMessage, time.Second)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+
+	actorResponse, ok := response.(*opspb.OpsActorResponse)
+	if !ok {
+		return nil, connect.NewError(connect.CodeInternal,
+			fmt.Errorf("invalid response type from OpsActor"))
+	}
+
+	healthCheckResponse := actorResponse.GetHealthCheck()
+	if healthCheckResponse == nil {
+		return nil, connect.NewError(connect.CodeInternal,
+			fmt.Errorf("OpsActor returned nil response for HealthCheck"))
+	}
+
+	return connect.NewResponse(healthCheckResponse), nil
+}
+
+// GetClusterStats returns cluster-wide statistics
+func (s *AccountService) GetClusterStats(ctx context.Context, req *connect.Request[opspb.ClusterStatsRequest]) (*connect.Response[opspb.ClusterStatsResponse], error) {
+	// Forward the request to the OpsActor
+	actorMessage := &opspb.OpsActorMessage{
+		Message: &opspb.OpsActorMessage_GetClusterStats{
+			GetClusterStats: req.Msg,
+		},
+	}
+
+	response, err := goakt.Ask(ctx, s.opsActor, actorMessage, time.Second)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+
+	actorResponse, ok := response.(*opspb.OpsActorResponse)
+	if !ok {
+		return nil, connect.NewError(connect.CodeInternal,
+			fmt.Errorf("invalid response type from OpsActor"))
+	}
+
+	clusterStatsResponse := actorResponse.GetClusterStats()
+	if clusterStatsResponse == nil {
+		return nil, connect.NewError(connect.CodeInternal,
+			fmt.Errorf("OpsActor returned nil response for GetClusterStats"))
+	}
+
+	return connect.NewResponse(clusterStatsResponse), nil
+}
+
 // Start starts the service
 func (s *AccountService) Start() {
+	go func() {
+		// Wait a short time to ensure actor system is fully running
+		time.Sleep(2 * time.Second)
+
+		// Start the OpsActor as a singleton in the cluster
+		opsActor := actors.NewOpsActor(s.remoting, s.logger, s.discovery, s.config)
+
+		// Spawn the OpsActor with a unique name to ensure singleton behavior
+		pid, err := s.actorSystem.Spawn(
+			context.Background(),
+			"ops-actor",
+			opsActor,
+			goakt.WithLongLived(), // Keep actor alive indefinitely
+		)
+		if err != nil {
+			s.logger.Panicf("failed to spawn OpsActor: %v", err)
+		}
+
+		s.opsActor = pid
+		s.logger.Info("OpsActor started successfully")
+	}()
+
 	go func() {
 		s.listenAndServe()
 	}()
@@ -210,6 +369,11 @@ func (s *AccountService) Start() {
 
 // Stop stops the service
 func (s *AccountService) Stop(ctx context.Context) error {
+	// Stop the OpsActor
+	if s.opsActor != nil {
+		s.actorSystem.Stop(context.Background())
+	}
+
 	return s.server.Shutdown(ctx)
 }
 
@@ -222,10 +386,16 @@ func (s *AccountService) listenAndServe() {
 	if err != nil {
 		s.logger.Panic(err)
 	}
-	// create the resource and handler
-	path, handler := samplepbconnect.NewAccountServiceHandler(s,
+
+	// Register AccountService handler
+	accountPath, accountHandler := samplepbconnect.NewAccountServiceHandler(s,
 		connect.WithInterceptors(interceptor))
-	mux.Handle(path, handler)
+	mux.Handle(accountPath, accountHandler)
+
+	// Register OpsService handler
+	opsPath, opsHandler := opspbconnect.NewOpsServiceHandler(s)
+	mux.Handle(opsPath, opsHandler)
+
 	// create the address
 	serverAddr := fmt.Sprintf(":%d", s.port)
 	// create a http server instance

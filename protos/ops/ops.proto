@@ -1,0 +1,118 @@
+syntax = "proto3";
+
+package opspb;
+
+option go_package = "goakt-actors-cluster/internal/opspb;opspb";
+
+// NodeStatus represents the status of a cluster node
+enum NodeStatus {
+  NODE_STATUS_UNKNOWN = 0;
+  NODE_STATUS_HEALTHY = 1;
+  NODE_STATUS_UNHEALTHY = 2;
+  NODE_STATUS_LEAVING = 3;
+  NODE_STATUS_JOINING = 4;
+}
+
+// ClusterNode represents a node in the cluster
+message ClusterNode {
+  string node_id = 1;
+  string host = 2;
+  int32 port = 3;
+  NodeStatus status = 4;
+  int64 last_heartbeat = 5;
+  int64 uptime_seconds = 6;
+  string actor_system_name = 7;
+  string service_name = 8;
+  int32 gossip_port = 9;
+  int32 peers_port = 10;
+  int32 remoting_port = 11;
+  int32 actor_count = 12;
+  string version = 13;
+}
+
+// ClusterInfo represents the overall cluster information
+message ClusterInfo {
+  string cluster_name = 1;
+  int32 total_nodes = 2;
+  int32 healthy_nodes = 3;
+  int32 unhealthy_nodes = 4;
+  int64 cluster_uptime_seconds = 5;
+  repeated ClusterNode nodes = 6;
+}
+
+// GetClusterNodesRequest is the request to get cluster nodes
+message GetClusterNodesRequest {
+  bool include_details = 1;
+}
+
+// GetClusterNodesResponse is the response containing cluster nodes
+message GetClusterNodesResponse {
+  ClusterInfo cluster_info = 1;
+}
+
+// GetNodeDetailsRequest is the request to get specific node details
+message GetNodeDetailsRequest {
+  string node_id = 1;
+}
+
+// GetNodeDetailsResponse is the response containing node details
+message GetNodeDetailsResponse {
+  ClusterNode node = 1;
+}
+
+// HealthCheckRequest is the request for health check
+message HealthCheckRequest {}
+
+// HealthCheckResponse is the response for health check
+message HealthCheckResponse {
+  string status = 1;
+  string timestamp = 2;
+  string version = 3;
+  string node_id = 4;
+}
+
+// ClusterStatsRequest is the request for cluster statistics
+message ClusterStatsRequest {}
+
+// ClusterStatsResponse is the response containing cluster statistics
+message ClusterStatsResponse {
+  int32 total_actors = 1;
+  int32 total_messages_processed = 2;
+  double average_message_latency_ms = 3;
+  int32 active_partitions = 4;
+  map<string, int32> actor_type_counts = 5;
+}
+
+// OpsService provides operational APIs for cluster management
+service OpsService {
+  // GetClusterNodes returns the list of all nodes in the cluster
+  rpc GetClusterNodes(GetClusterNodesRequest) returns (GetClusterNodesResponse);
+  
+  // GetNodeDetails returns detailed information about a specific node
+  rpc GetNodeDetails(GetNodeDetailsRequest) returns (GetNodeDetailsResponse);
+  
+  // HealthCheck performs a health check on the current node
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+  
+  // GetClusterStats returns cluster-wide statistics
+  rpc GetClusterStats(ClusterStatsRequest) returns (ClusterStatsResponse);
+}
+
+// OpsActor messages for actor-based cluster operations
+message OpsActorMessage {
+  oneof message {
+    GetClusterNodesRequest get_cluster_nodes = 1;
+    GetNodeDetailsRequest get_node_details = 2;
+    HealthCheckRequest health_check = 3;
+    ClusterStatsRequest get_cluster_stats = 4;
+  }
+}
+
+message OpsActorResponse {
+  oneof response {
+    GetClusterNodesResponse cluster_nodes = 1;
+    GetNodeDetailsResponse node_details = 2;
+    HealthCheckResponse health_check = 3;
+    ClusterStatsResponse cluster_stats = 4;
+  }
+}

@@ -27,6 +27,7 @@ package cmd
 import (
 	"context"
 	"goakt-actors-cluster/actors"
+	"goakt-actors-cluster/config"
 	"goakt-actors-cluster/discovery"
 	"goakt-actors-cluster/service"
 	"os"
@@ -60,7 +61,7 @@ var runCmd = &cobra.Command{
 		etcdTimeout, _ := cmd.Flags().GetInt("etcd-timeout")
 
 		// get the configuration with command line overrides
-		config, err := service.GetConfigWithOverrides(
+		config, err := config.GetConfigWithOverrides(
 			port, serviceName, systemName, gossipPort, peersPort, remotingPort,
 			etcdEndpoints, etcdDialTimeout, etcdTTL, etcdTimeout,
 		)
@@ -111,12 +112,12 @@ var runCmd = &cobra.Command{
 		}
 
 		remoting := remote.NewRemoting()
-		// create the account service
-		accountService := service.NewAccountService(actorSystem, remoting, logger, config.Port)
+		// create the combined service (AccountService with Ops functionality)
+		accountService := service.NewAccountService(actorSystem, remoting, logger, disco, config, config.Port)
 
 		actorSystem.Run(ctx,
 			func(ctx context.Context) error {
-				// start the account service
+				// start the combined service
 				accountService.Start()
 				return nil
 			},
@@ -124,7 +125,11 @@ var runCmd = &cobra.Command{
 				remoting.Close()
 				newCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 				defer cancel()
-				return accountService.Stop(newCtx)
+				// stop the combined service
+				if err := accountService.Stop(newCtx); err != nil {
+					logger.Errorf("failed to stop account service %+v", err)
+				}
+				return nil
 			})
 	},
 }
