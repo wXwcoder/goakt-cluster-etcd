@@ -341,25 +341,63 @@ func (s *AccountService) GetClusterStats(ctx context.Context, req *connect.Reque
 // Start starts the service
 func (s *AccountService) Start() {
 	go func() {
-		// Wait a short time to ensure actor system is fully running
-		time.Sleep(2 * time.Second)
+		// Wait for actor system to be fully running with retry mechanism
+		maxRetries := 10
+		retryInterval := 1 * time.Second
 
-		// Start the OpsActor as a singleton in the cluster
-		opsActor := actors.NewOpsActor(s.remoting, s.logger, s.discovery, s.config)
+		for i := 0; i < maxRetries; i++ {
+			time.Sleep(retryInterval)
 
-		// Spawn the OpsActor with a unique name to ensure singleton behavior
-		pid, err := s.actorSystem.Spawn(
-			context.Background(),
-			"ops-actor",
-			opsActor,
-			goakt.WithLongLived(), // Keep actor alive indefinitely
-		)
-		if err != nil {
-			s.logger.Panicf("failed to spawn OpsActor: %v", err)
+			// Check if actor system is running by attempting to spawn a test actor
+			testActor := &testActor{}
+			_, err := s.actorSystem.Spawn(
+				context.Background(),
+				"test-actor-"+fmt.Sprintf("%d", i),
+				testActor,
+				goakt.WithLongLived(), // Keep actor alive for testing
+			)
+
+			if err == nil {
+				// Actor system is running, proceed with OpsActor
+				break
+			}
+
+			if i == maxRetries-1 {
+				s.logger.Panicf("actor system failed to start after %d retries: %v", maxRetries, err)
+			}
+
+			s.logger.Warnf("actor system not ready yet, retrying in %v (attempt %d/%d)", retryInterval, i+1, maxRetries)
 		}
 
-		s.opsActor = pid
-		s.logger.Info("OpsActor started successfully")
+		// Start the OpsActor for this node
+		opsActor := actors.NewOpsActor(s.remoting, s.logger, s.discovery, s.config)
+
+		// Spawn the OpsActor with a unique name based on the service name
+		opsActorName := "ops-actor"
+		//opsActorName := fmt.Sprintf("ops-actor-%s", s.config.ServiceName)
+		s.logger.Infof("Attempting to create OpsActor with name: %s (ServiceName: %s)", opsActorName, s.config.ServiceName)
+
+		// Check if OpsActor already exists before spawning
+		ctx := context.Background()
+		exists, err := s.actorSystem.ActorExists(ctx, opsActorName)
+		if err == nil && exists {
+			// OpsActor already exists, use the existing one
+			s.logger.Infof("OpsActor already exists, using existing actor: %s", opsActorName)
+		} else {
+			// Spawn a new OpsActor
+			pid, err := s.actorSystem.Spawn(
+				ctx,
+				opsActorName,
+				opsActor,
+				goakt.WithLongLived(), // Keep actor alive indefinitely
+			)
+			if err != nil {
+				s.logger.Panicf("failed to spawn OpsActor: %v", err)
+			}
+
+			s.opsActor = pid
+			s.logger.Infof("OpsActor started successfully with name: %s", opsActorName)
+		}
 	}()
 
 	go func() {
@@ -419,4 +457,19 @@ func (s *AccountService) listenAndServe() {
 		}
 		s.logger.Panic(errors.Wrap(err, "failed to start actor-remoting service"))
 	}
+}
+
+// testActor is a simple actor used to check if the actor system is running
+type testActor struct{}
+
+func (t *testActor) PreStart(*goakt.Context) error {
+	return nil
+}
+
+func (t *testActor) Receive(ctx *goakt.ReceiveContext) {
+	// Do nothing - this actor is only used for testing system readiness
+}
+
+func (t *testActor) PostStop(*goakt.Context) error {
+	return nil
 }
