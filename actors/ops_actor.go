@@ -204,7 +204,7 @@ func (p *OpsActor) handleGetActorDetails(ctx *goakt.ReceiveContext, req *opspb.G
 	nodeID := req.GetNodeId()
 
 	// Get all actors from the cluster
-	actors := p.getClusterActors()
+	actors := p.getClusterActors(ctx)
 
 	// Filter actors based on request parameters
 	var filteredActors []*opspb.ActorDetails
@@ -291,11 +291,11 @@ func (p *OpsActor) getClusterNodes() ([]*opspb.ClusterNode, error) {
 }
 
 // getClusterActors retrieves all actors from the cluster
-func (p *OpsActor) getClusterActors() []*opspb.ActorDetails {
+func (p *OpsActor) getClusterActors(ctx *goakt.ReceiveContext) []*opspb.ActorDetails {
 	var actors []*opspb.ActorDetails
 
 	// Get current node's actors
-	currentNodeActors := p.getCurrentNodeActors()
+	currentNodeActors := p.getCurrentNodeActors(ctx)
 
 	actors = append(actors, currentNodeActors...)
 
@@ -306,63 +306,49 @@ func (p *OpsActor) getClusterActors() []*opspb.ActorDetails {
 }
 
 // getCurrentNodeActors retrieves actors from the current node
-func (p *OpsActor) getCurrentNodeActors() []*opspb.ActorDetails {
+func (p *OpsActor) getCurrentNodeActors(ctx *goakt.ReceiveContext) []*opspb.ActorDetails {
 	var actors []*opspb.ActorDetails
 
 	// Get hostname for node ID
 	hostname, _ := os.Hostname()
 	nodeID := fmt.Sprintf("%s:%d", hostname, p.config.GossipPort)
 
-	// TODO: Implement actual actor retrieval from the actor system
-	// For now, we'll create sample data to demonstrate the functionality
+	// Get the actor system from the context
+	actorSystem := ctx.Self().ActorSystem()
 
-	// Sample account actors (simulating actual account actors in the system)
-	sampleActors := []string{
-		"account-001",
-		"account-002",
-		"account-003",
-		"account-004",
-		"account-005",
-	}
+	// Get all actors from the current node's actor system
+	systemActors := actorSystem.Actors()
 
-	for i, actorID := range sampleActors {
+	// Convert system actors to ActorDetails
+	for _, systemActor := range systemActors {
+		actorID := systemActor.Name()
+
+		// Determine actor type based on actor name or other criteria
+		actorType := "Unknown"
+		if actorID == "ops-actor" {
+			actorType = "OpsActor"
+		} else if len(actorID) >= 7 && actorID[:7] == "account" {
+			actorType = "Account"
+		}
+
 		actor := &opspb.ActorDetails{
 			ActorId:       actorID,
-			ActorType:     "Account",
+			ActorType:     actorType,
 			NodeId:        nodeID,
 			Status:        opspb.ActorStatus_ACTOR_STATUS_RUNNING,
-			CreatedAt:     time.Now().Add(-time.Duration(i) * time.Hour).Unix(),
-			LastActivity:  time.Now().Add(-time.Duration(i) * time.Minute).Unix(),
-			MessageCount:  int32(i * 10),
-			ErrorCount:    int32(i),
-			ParentActorId: "", // Account actors typically don't have parents
-			ChildActorIds: []string{},
+			CreatedAt:     time.Now().Unix(), // TODO: Get actual creation time from actor
+			LastActivity:  time.Now().Unix(), // TODO: Get actual last activity time from actor
+			MessageCount:  0,                 // TODO: Track actual message count
+			ErrorCount:    0,                 // TODO: Track actual error count
+			ParentActorId: "",                // TODO: Get parent actor ID if available
+			ChildActorIds: []string{},        // TODO: Get child actor IDs if available
 			Metadata: map[string]string{
-				"created_by": "system",
-				"version":    "1.0.0",
+				"actor_state": fmt.Sprintf("%v", systemActor.IsRunning()),
+				"created_by":  "system",
 			},
 		}
 		actors = append(actors, actor)
 	}
-
-	// Add the OpsActor itself
-	opsActor := &opspb.ActorDetails{
-		ActorId:       "ops-actor",
-		ActorType:     "OpsActor",
-		NodeId:        nodeID,
-		Status:        opspb.ActorStatus_ACTOR_STATUS_RUNNING,
-		CreatedAt:     p.startTime.Unix(),
-		LastActivity:  time.Now().Unix(),
-		MessageCount:  0, // TODO: Track actual message count
-		ErrorCount:    0,
-		ParentActorId: "",
-		ChildActorIds: []string{},
-		Metadata: map[string]string{
-			"role":        "cluster-management",
-			"description": "Cluster operations and monitoring actor",
-		},
-	}
-	actors = append(actors, opsActor)
 
 	return actors
 }

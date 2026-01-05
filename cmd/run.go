@@ -96,7 +96,8 @@ var runCmd = &cobra.Command{
 			WithDiscoveryPort(config.GossipPort).
 			WithPeersPort(config.PeersPort).
 			WithClusterBalancerInterval(time.Second).
-			WithKinds(new(actors.Account))
+			WithKinds(new(actors.Account)).
+			WithKinds(new(actors.OpsActor))
 
 		// create the actor system
 		actorSystem, err := goakt.NewActorSystem(
