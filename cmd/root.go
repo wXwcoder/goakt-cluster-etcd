@@ -49,6 +49,7 @@ func Execute() {
 
 func init() {
 	err := godotenv.Load()
+	println("Loading .env file, err:", err)
 	if err != nil && !os.IsNotExist(err) {
 		panic(errors.Wrap(err, "Error loading .env file,"))
 	}

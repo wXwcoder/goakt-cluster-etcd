@@ -6,6 +6,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/joho/godotenv"
+	"github.com/pkg/errors"
 	"github.com/tochemey/goakt/v3/address"
 	"github.com/tochemey/goakt/v3/log"
 )
@@ -22,6 +24,14 @@ type Config struct {
 	Endpoints []string
 	Timeout   time.Duration
 	Logger    log.Logger
+}
+
+func init() {
+	err := godotenv.Load()
+	println("Loading .env file, err:", err)
+	if err != nil && !os.IsNotExist(err) {
+		panic(errors.Wrap(err, "Error loading .env file,"))
+	}
 }
 
 // New creates a new cluster client

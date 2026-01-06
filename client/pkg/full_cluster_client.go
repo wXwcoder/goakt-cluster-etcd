@@ -4,11 +4,15 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"goakt-actors-cluster/actors"
+	"goakt-actors-cluster/config"
+	"goakt-actors-cluster/discovery"
 	"goakt-actors-cluster/internal/opspb"
 	"goakt-actors-cluster/internal/samplepb"
 
@@ -218,15 +222,65 @@ func (l *LeastLoad) Next() *Node {
 func NewFullClusterClient(endpoints []string, remoteConfig *remote.Config) (*FullClusterClient, error) {
 	logger := log.New(log.InfoLevel, os.Stdout)
 
-	// Create a client actor system that can connect to the cluster
-	actorSystem, err := goakt.NewActorSystem(
-		"FullClusterClientSystem",
-		goakt.WithLogger(logger),
-		goakt.WithRemote(remoteConfig), // Enable remoting for remote communication
-	)
+	// get command line parameters
+	port := 11001
+	serviceName := "client"
+	systemName := "Accounts"
+	gossipPort := 11002
+	peersPort := 11003
+	remotingPort := 11004
+	etcdEndpoints := []string{"localhost:2379"}
+	etcdDialTimeout := 5
+	etcdTTL := int64(5)
+	etcdTimeout := 5
 
+	// get the configuration with command line overrides
+	config, err := config.GetConfigWithOverrides(
+		port, serviceName, systemName, gossipPort, peersPort, remotingPort,
+		etcdEndpoints, etcdDialTimeout, etcdTTL, etcdTimeout,
+	)
+	//  handle the error
 	if err != nil {
-		return nil, fmt.Errorf("failed to create actor system: %w", err)
+		panic(err)
+	}
+	// grab the host
+	host, _ := os.Hostname()
+
+	// define the discovery options
+	// Use PeersPort for discovery registration to avoid port conflict with GossipPort
+	discoConfig := &discovery.Config{
+		Endpoints:       config.EtcdEndpoints,
+		ActorSystemName: config.ActorSystemName,
+		Host:            host,
+		DiscoveryPort:   config.GossipPort,
+		TTL:             config.EtcdTTL,
+		DialTimeout:     time.Duration(config.EtcdDialTimeout) * time.Second,
+		Timeout:         time.Duration(config.EtcdTimeout) * time.Second,
+	}
+	// instantiate the etcd discovery provider
+	disco := discovery.NewDiscovery(discoConfig)
+
+	clusterConfig := goakt.
+		NewClusterConfig().
+		WithDiscovery(disco).
+		WithPartitionCount(19).
+		WithDiscoveryPort(config.GossipPort).
+		WithPeersPort(config.PeersPort).
+		WithClusterBalancerInterval(time.Second).
+		WithKinds(new(actors.Account)).
+		WithKinds(new(actors.OpsActor))
+
+	// create the actor system
+	actorSystem, err := goakt.NewActorSystem(
+		config.ActorSystemName,
+		goakt.WithLogger(logger),
+		goakt.WithActorInitMaxRetries(3),
+		goakt.WithRemote(remote.NewConfig(host, config.RemotingPort)),
+		goakt.WithCluster(clusterConfig))
+
+	// handle the error
+	if err != nil {
+		logger.Panic(err)
 	}
 
 	// Create node instances from endpoints
@@ -246,6 +300,7 @@ func NewFullClusterClient(endpoints []string, remoteConfig *remote.Config) (*Ful
 		timeout:     10 * time.Second, // default timeout
 		nodes:       nodes,
 		balancer:    NewRoundRobin(),
+		remoting:    remote.NewRemoting(),
 	}
 
 	// Set nodes in the balancer
@@ -485,9 +540,64 @@ func (c *FullClusterClient) HealthCheck(ctx context.Context) (*opspb.HealthCheck
 func (c *FullClusterClient) ListActorKinds(ctx context.Context) ([]string, error) {
 	c.logger.Info("Listing actor kinds in cluster")
 
-	// In a real implementation, this would query the cluster for registered actor kinds
-	// For now, we'll return mock data
-	kinds := []string{"Account", "OpsActor", "SampleActor"}
+	// Find the next node using the balancer strategy
+	node := c.balancer.Next()
+	if node == nil {
+		return nil, fmt.Errorf("no available nodes in cluster")
+	}
+
+	host, port := node.HostAndPort()
+	c.logger.Infof("Querying actor kinds from node %s:%d", host, port)
+
+	// Create the OpsActor address using the correct node information
+	opsActorAddress := address.New("ops-actor", "Accounts", host, port)
+	c.logger.Infof("OpsActor Address: %s", opsActorAddress.String())
+
+	// Create GetActorDetails request wrapped in OpsActorMessage
+	opsMessage := &opspb.OpsActorMessage{
+		Message: &opspb.OpsActorMessage_GetActorDetails{
+			GetActorDetails: &opspb.GetActorDetailsRequest{},
+		},
+	}
+
+	// Use the existing RemoteAsk method which handles cluster communication correctly
+	response, err := c.RemoteAsk(ctx, opsActorAddress, opsMessage)
+	if err != nil {
+		c.logger.Errorf("Failed to query actor details from OpsActor: %v", err)
+		return nil, fmt.Errorf("failed to query actor details: %w", err)
+	}
+
+	// Cast response to expected type
+	opsResponse, ok := response.(*opspb.OpsActorResponse)
+	if !ok {
+		c.logger.Errorf("Invalid response type: %T", response)
+		return nil, fmt.Errorf("invalid response type from OpsActor")
+	}
+
+	// Extract actor details response
+	actorDetailsResponse := opsResponse.GetActorDetails()
+	if actorDetailsResponse == nil {
+		c.logger.Error("OpsActor returned nil response for GetActorDetails")
+		return nil, fmt.Errorf("OpsActor returned nil response for GetActorDetails")
+	}
+
+	// Extract unique actor types from the actor details
+	actorTypes := make(map[string]bool)
+	for _, actor := range actorDetailsResponse.GetActors() {
+		actorType := actor.GetActorType()
+		if actorType != "" && actorType != "Unknown" {
+			actorTypes[actorType] = true
+		}
+	}
+
+	// Convert map to slice
+	kinds := make([]string, 0, len(actorTypes))
+	for actorType := range actorTypes {
+		kinds = append(kinds, actorType)
+	}
+
+	// Sort the kinds for consistent output
+	sort.Strings(kinds)
 
 	c.logger.Infof("Found %d actor kinds: %v", len(kinds), kinds)
 	return kinds, nil

@@ -206,16 +206,18 @@ func (p *OpsActor) handleGetActorDetails(ctx *goakt.ReceiveContext, req *opspb.G
 	// Get all actors from the cluster
 	actors := p.getClusterActors(ctx)
 
+	p.logger.Infof("handleGetActorDetails, req:%+v actors:%+v", req, actors)
+
 	// Filter actors based on request parameters
 	var filteredActors []*opspb.ActorDetails
 	for _, actor := range actors {
 		// Filter by node ID if specified
 		if nodeID != "" && actor.NodeId != nodeID {
-			continue
+			//continue
 		}
 		// Filter by actor ID if specified
 		if actorID != "" && actor.ActorId != actorID {
-			continue
+			//continue
 		}
 		filteredActors = append(filteredActors, actor)
 	}

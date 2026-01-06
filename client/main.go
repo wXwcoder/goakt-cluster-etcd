@@ -12,11 +12,11 @@ import (
 )
 
 var (
-	endpoints    []string = []string{"localhost:14001"}
+	endpoints    []string = []string{"10.55.17.240:14001"}
 	accountID    string   = "account01"
 	balance      float64  = 1000.00
 	amount       float64  = 500.00
-	host         string   = "localhost"
+	host         string   = "10.55.17.240"
 	remotingPort int      = 14002
 	balancerType string   = "random"
 )
